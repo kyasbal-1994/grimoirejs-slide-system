@@ -2,7 +2,7 @@
 var __VERSION__ = "1.0.0";
 var __NAME__ = "grimoirejs-ts-boilerplate";
 
-import __MAIN__ from "./main"
+import __MAIN__ from "./main";
 
 var __EXPOSE__ = {};
 
