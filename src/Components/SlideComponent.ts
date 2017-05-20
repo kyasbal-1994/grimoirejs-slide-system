@@ -35,18 +35,18 @@ export default class SlideComponent extends Component{
   }
 
   public slideStart():void{
-
+    this.node.emit("slide-start");
   }
 
   public slideEnd():void{
-
+    this.node.emit("slide-end");
   }
 
   public buildStart(build:number):void{
-
+    this.node.emit("build-start",build);
   }
 
   public buildEnd(build:number):void{
-
+    this.node.emit("slide-end",build);
   }
 }

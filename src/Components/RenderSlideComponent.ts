@@ -58,6 +58,9 @@ export default class RenderSlideComponent extends Component{
 
   public $render(args: IRenderRendererMessage):void{
     if(!this._transiting){
+      this._gl.bindFramebuffer(WebGLRenderingContext.FRAMEBUFFER,null);
+      this._gl.clearColor(0,0,0,0);
+      this._gl.clear(WebGLRenderingContext.COLOR_BUFFER_BIT|WebGLRenderingContext.DEPTH_BUFFER_BIT);
       const slideInfo = this._getSlide(this._currentFrame);
       slideInfo.slide.camera.updateContainedScene(args.timer);
       slideInfo.slide.camera.renderScene({
@@ -81,22 +84,41 @@ export default class RenderSlideComponent extends Component{
   }
 
   public next():void{
+    const lastFrame = this._currentFrame;
     let allFrame = 0;
     for(let i = 0; i < this._slides.length; i++){
       allFrame+= this._slides[i].build;
     }
     this._currentFrame = Math.min(this._currentFrame + 1,allFrame - 1);
     window.location.hash = "" + this._currentFrame;
+    this._enterFrame(lastFrame,this._currentFrame);
   }
 
   public prev():void{
-    this._currentFrame = Math.max(this._currentFrame + 1,0);
+    const lastFrame = this._currentFrame;
+    const slideInfo = this._getSlide(this._currentFrame); // 前のスライドの最後までを計算
+    this._currentFrame = Math.max(this._currentFrame - 1 - slideInfo.build,0);
+    let prevSlideInfo = this._getSlide(this._currentFrame); // さらに前のスライドの最初まで戻す
+    this._currentFrame = Math.max(this._currentFrame - prevSlideInfo.build,0);
+    window.location.hash = "" + this._currentFrame;
+    this._enterFrame(lastFrame,this._currentFrame);
   }
 
   private _resizeTexture(width:number, height:number):void{
     this._nextTexture.update(0,width,height,0,WebGLRenderingContext.RGBA,WebGLRenderingContext.UNSIGNED_BYTE);
     this._currentTexture.update(0,width,height,0,WebGLRenderingContext.RGBA,WebGLRenderingContext.UNSIGNED_BYTE);
     this._renderBuffer.update(WebGLRenderingContext.DEPTH_COMPONENT16,width,height);
+  }
+
+  private _enterFrame(lastFrame:number,frame:number):void{
+    const lastSlide = this._getSlide(lastFrame);
+    const currentSlide = this._getSlide(frame);
+    lastSlide.slide.buildEnd(lastSlide.build);
+    if(lastSlide.slide !== currentSlide.slide){
+      lastSlide.slide.slideEnd();
+      currentSlide.slide.slideStart();
+    }
+    currentSlide.slide.buildStart(currentSlide.build);
   }
 
   /**
