@@ -1,5 +1,5 @@
 {
-    "name": "grimoirejs-ts-boilerplate",
+    "name": "grimoirejs-slide-system",
     "version": "1.0.0",
     "description": "The boilerplate project for making plugin of grimoire.js.",
     "main": "index.js",
@@ -11,13 +11,15 @@
     "scripts": {
         "start": "webpack --watch --progress",
         "bundle": "webpack --progress --watch",
-        "prepublish": "npm run build -- --prod",
+        "prepublish": "npm run build",
         "build": "webpack --progress",
-        "generate-expose": "cauldron generate-exposure --src ./src --dest ./src/index.ts --ts --main ./src/main.ts --dts ./ref",
-        "generate-reference": "cauldron generate-reference --src ./src --dest ./src/index.ts --ts --main ./src/main.ts --dts ./ref"
+        "prebuild": "cauldron generate-exposure --src ./src --dest ./src/index.ts --ts --main ./src/main.ts --dts ./ref",
+        "postbuild": "cauldron generate-reference --src ./src --dest ./src/index.ts --ts --main ./src/main.ts --dts ./ref"
     },
     "dependencies": {
-        "grimoirejs": "latest"
+        "grimoirejs": "latest",
+        "grimoirejs-fundamental": "^0.18.1",
+        "grimoirejs-math": "^1.12.7"
     },
     "devDependencies": {
         "babel-cli": "^6.18.0",
