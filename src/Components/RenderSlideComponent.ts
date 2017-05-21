@@ -5,6 +5,8 @@ import IBufferUpdatedMessage from "grimoirejs-fundamental/ref/Messages/IBufferUp
 import IResizeBufferMessage from "grimoirejs-fundamental/ref/Messages/IResizeBufferMessage";
 import Framebuffer from "grimoirejs-fundamental/ref/Resource/FrameBuffer";
 import Texture2D from "grimoirejs-fundamental/ref/Resource/Texture2D";
+import TextureReference from "grimoirejs-fundamental/ref/Material/TextureReference";
+
 import Renderbuffer from "grimoirejs-fundamental/ref/Resource/Renderbuffer";
 import Geometry from "grimoirejs-fundamental/ref/Geometry/Geometry";
 import GeometryRegistoryComponent from "grimoirejs-fundamental/ref/Components/GeometryRegistoryComponent";
@@ -43,6 +45,12 @@ export default class RenderSlideComponent extends Component {
 
   private _quad: Geometry;
 
+  private _lastWaitingHash:number;
+
+  private _bufferWidth:number;
+
+  private _bufferHeight:number;
+
   public async $mount() {
     this._gl = this.companion.get("gl") as WebGLRenderingContext;
     this._currentBuffer = new Framebuffer(this._gl);
@@ -57,11 +65,14 @@ export default class RenderSlideComponent extends Component {
     this._lastBuffer.update(this._renderBuffer);
     this._slides = this.tree("goml").single().getComponentsInChildren(SlideComponent);
     this.getAttributeRaw("current").boundTo("_currentFrame");
-    const frame = Number.parseInt(window.location.hash.substring(1));
-    if (!isNaN(frame)) {
-      this._currentFrame = frame;
+    const frame = window.location.hash.substring(1);
+    let parsed;
+    if (!frame && (parsed = /(\d)+\-(\d+)?/.exec(frame))) {
+      this._currentFrame = this._toFrameIndex(parseInt(parsed[1]),parseInt(parsed[2]||(0+'')));
     } else {
-      window.location.hash = "" + this._currentFrame;
+      setTimeout(()=>{
+        this._updateHash(this._currentFrame);
+      },0);
     }
     const gr = this.companion.get("GeometryRegistory") as GeometryRegistoryComponent;
     this._quad = await gr.getGeometry("quad");
@@ -79,10 +90,14 @@ export default class RenderSlideComponent extends Component {
       this._renderTo(args, lastSlide.slide, this._lastBuffer);
       this._gl.bindFramebuffer(WebGLRenderingContext.FRAMEBUFFER,null);
       this._gl.clear(WebGLRenderingContext.COLOR_BUFFER_BIT|WebGLRenderingContext.DEPTH_BUFFER_BIT);
+      this._gl.viewport(0,0,args.viewport.Width,args.viewport.Height);
+      slideInfo.slide.transitionMaterial.setAttribute("progress",progress);
+      slideInfo.slide.transitionMaterial.setAttribute("last",this._lastTexture);
+      slideInfo.slide.transitionMaterial.setAttribute("current",this._currentTexture);
       slideInfo.slide.transitionMaterial.material.draw({
         targetBuffer: "default",
         geometry: this._quad,
-        attributeValues: slideInfo.slide.transitionMaterial.materialArgs,
+        attributeValues: {},
         sceneDescription:{},
         camera: null,
         transform: null,
@@ -99,8 +114,10 @@ export default class RenderSlideComponent extends Component {
 
   private _renderTo(args: IRenderRendererMessage, slide: SlideComponent, fbo?: Framebuffer): void {
     if (fbo) {
+      this._gl.viewport(0,0,this._bufferWidth,this._bufferHeight);
       fbo.bind();
     } else {
+      this._gl.viewport(0,0,args.viewport.Width,args.viewport.Height);
       this._gl.bindFramebuffer(WebGLRenderingContext.FRAMEBUFFER, null);
     }
     this._gl.clearColor(0, 0, 0, 0);
@@ -137,12 +154,16 @@ export default class RenderSlideComponent extends Component {
       this._transiting = true;
       this._lastTransitionTime = currentFrameInfo.slide.transitionTime * 1000;
       this._transitionStartTime = Date.now();
+      const hash = this._lastWaitingHash = Math.random();
       await this._waitFor(currentFrameInfo.slide.transitionTime * 1000);
+      if(hash !== this._lastWaitingHash){
+        return; // This waiting was canceled
+      }
       this._lastTransitionTime = 0;
       this._transitionStartTime = 0;
       this._transiting = false;
     }
-    window.location.hash = "" + this._currentFrame;
+    this._updateHash(this._currentFrame);
     this._enterFrame(lastFrame, this._currentFrame);
   }
 
@@ -153,16 +174,20 @@ export default class RenderSlideComponent extends Component {
 
     let prevSlideInfo = this._getSlide(this._currentFrame); // さらに前のスライドの最初まで戻す
     this._currentFrame = Math.max(this._currentFrame - prevSlideInfo.build, 0);
-    window.location.hash = "" + this._currentFrame;
+    this._updateHash(this._currentFrame);
     this._enterFrame(lastFrame, this._currentFrame);
     this._lastTransitionTime = 0;
     this._transitionStartTime = 0;
+    this._lastWaitingHash = -1;
+    this._transiting = false;
   }
 
   private _resizeTexture(width: number, height: number): void {
     this._lastTexture.update(0, width, height, 0, WebGLRenderingContext.RGBA, WebGLRenderingContext.UNSIGNED_BYTE);
     this._currentTexture.update(0, width, height, 0, WebGLRenderingContext.RGBA, WebGLRenderingContext.UNSIGNED_BYTE);
     this._renderBuffer.update(WebGLRenderingContext.DEPTH_COMPONENT16, width, height);
+    this._bufferWidth = width;
+    this._bufferHeight = height;
   }
 
   private _enterFrame(lastFrame: number, frame: number): void {
@@ -181,12 +206,13 @@ export default class RenderSlideComponent extends Component {
    * @param  {number} index [description]
    * @return {[type]}       [description]
    */
-  private _getSlide(index: number): { slide: SlideComponent, build: number } {
+  private _getSlide(index: number): { slideIndex:number,slide: SlideComponent, build: number } {
     let currentIndex = 0;
     for (let i = 0; i < this._slides.length; i++) {
       const slide = this._slides[i];
       if (currentIndex + slide.build > index) {
         return {
+          slideIndex:i,
           slide: slide,
           build: index - currentIndex
         };
@@ -201,5 +227,22 @@ export default class RenderSlideComponent extends Component {
         resolve();
       }, time);
     });
+  }
+
+  private _toFrameIndex(slideIndex:number,buildIndex:number):number{
+    let sum = 0;
+    for(let i = 0; i < slideIndex; i ++){
+      sum += this._slides[i].build;
+    }
+    return sum + buildIndex;
+  }
+
+  private _updateHash(frame:number):void{
+    const slideInfo = this._getSlide(frame);
+    if(slideInfo.slide.build === 1){
+      window.location.hash = `${slideInfo.slideIndex}`;
+    }else{
+      window.location.hash = `${slideInfo.slideIndex}-${slideInfo.build}`;
+    }
   }
 }
