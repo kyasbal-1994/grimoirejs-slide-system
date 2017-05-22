@@ -107,9 +107,6 @@ export default class RenderSlideComponent extends Component {
       } as any);
       this._gl.flush();
     }
-    // this._currentBuffer.bind();
-    // this._gl.clearColor(1,0,0,1);
-    // this._gl.clear(WebGLRenderingContext.COLOR_BUFFER_BIT|WebGLRenderingContext.DEPTH_BUFFER_BIT);
   }
 
   private _renderTo(args: IRenderRendererMessage, slide: SlideComponent, fbo?: Framebuffer): void {
@@ -189,7 +186,11 @@ export default class RenderSlideComponent extends Component {
     this._bufferWidth = width;
     this._bufferHeight = height;
   }
-
+  /**
+   * Call slide components events
+   * @param {number} lastFrame [description]
+   * @param {number} frame     [description]
+   */
   private _enterFrame(lastFrame: number, frame: number): void {
     const lastSlide = this._getSlide(lastFrame);
     const currentSlide = this._getSlide(frame);
